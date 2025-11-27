@@ -1,0 +1,38 @@
+{
+  "name": "marl-ai-toolkit",
+  "version": "1.0.0",
+  "description": "Multi-Agent Reinforcement Learning AI Toolkit for wide-scope applications",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "test": "jest",
+    "sim": "node dist/index.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.15.0",
+    "canvas": "^3.2.0",
+    "express": "^5.1.0",
+    "ml-matrix": "^6.10.4",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/node": "^20.0.0",
+    "@types/socket.io": "^3.0.1",
+    "jest": "^29.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "ai",
+    "swarm",
+    "reinforcement-learning",
+    "traffic",
+    "safety",
+    "autonomous-vehicles"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

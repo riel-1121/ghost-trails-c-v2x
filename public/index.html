@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghost Trails Demo - C-V2X Hazard Sharing</title>
+  <!-- For Tesla Engineers: This demo shows how C-V2X ghost trails could enhance FSD safety -->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      font-family: 'Courier New', monospace;
+      color: #00ff00;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #000;
+    }
+    #stats {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border: 1px solid #00ff00;
+      font-size: 12px;
+    }
+    #log {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border: 1px solid #00ff00;
+      font-size: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      width: 400px;
+    }
+    #freeze {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      color: #ff0000;
+      text-shadow: 0 0 10px #ff0000;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+  </style>
+</head>
+<body>
+  <div id="stats">Packets: 0 | Ghosts: 0 | Time: 0s</div>
+  <div id="log">DENM Log:<br></div>
+  <div id="freeze">FREEZE!</div>
+  <canvas id="canvas"></canvas>
+  <script>
+    class GhostTrailsDemo {
+      constructor() {
+        this.vehicles = [];
+        this.ghosts = [];
+        this.highwayLength = 1500;
+        this.icePosition = 300;
+        this.totalTime = 0;
+        this.reset();
+      }
+
+      reset() {
+        this.vehicles = [
+          { id: 0, x: 50, y: 50, speed: 5, color: '#3498db', type: 'lead', direction: 0, lateralSpeed: 0 },
+          { id: 1, x: 200, y: 50, speed: 5, color: '#e74c3c', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 2, x: 350, y: 50, speed: 5, color: '#27ae60', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 3, x: 500, y: 50, speed: 5, color: '#f39c12', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 4, x: 100, y: 50, speed: 4.5, color: '#9b59b6', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 5, x: 250, y: 50, speed: 5.5, color: '#1abc9c', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 6, x: 400, y: 50, speed: 4, color: '#e67e22', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 7, x: 150, y: 50, speed: 5.2, color: '#34495e', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 8, x: 300, y: 50, speed: 4.8, color: '#16a085', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 9, x: 450, y: 50, speed: 5.3, color: '#f1c40f', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 10, x: 50, y: 50, speed: 4.7, color: '#e74c3c', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 11, x: 200, y: 50, speed: 5.1, color: '#9b59b6', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 12, x: 350, y: 50, speed: 4.9, color: '#27ae60', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 13, x: 500, y: 50, speed: 5.4, color: '#f39c12', type: 'follow', direction: 0, lateralSpeed: 0 },
+          { id: 14, x: 100, y: 50, speed: 4.6, color: '#1abc9c', type: 'follow', direction: 0, lateralSpeed: 0 },
+        ];
+        this.ghosts = [];
+        this.totalTime = 0;
+      }
+
+      step(deltaTime) {
+        this.totalTime += deltaTime;
+        this.vehicles.forEach(vehicle => {
+          if (vehicle.type === 'follow') {
+            let lateralForce = 0;
+            this.ghosts.forEach(ghost => {
+              const dx = ghost.x - vehicle.x;
+              const dist = Math.abs(dx);
+              if (dist < 120 && ghost.age < 60) {
+                const strength = (1 - ghost.age / 60) * 0.2;
+                lateralForce += strength * (dx > 0 ? -1 : 1);
+              }
+            });
+            vehicle.lateralSpeed += lateralForce * 0.05;
+            vehicle.lateralSpeed *= 0.95;
+            vehicle.y = 50 + vehicle.lateralSpeed * 10;
+          }
+          vehicle.x += vehicle.speed;
+          if (vehicle.x > this.highwayLength) {
+            vehicle.x = -50;
+            vehicle.direction = 0;
+            vehicle.lateralSpeed = 0;
+            vehicle.y = 50;
+          }
+        });
+
+        const lead = this.vehicles.find(v => v.type === 'lead');
+        if (lead && lead.x >= this.icePosition - 5 && lead.x <= this.icePosition + 5 && this.ghosts.length === 0) {
+          lead.x += (Math.random() - 0.5) * 20;
+          lead.y += (Math.random() - 0.5) * 10;
+          this.ghosts.push({ x: this.icePosition, y: 50, age: 0, maxAge: 60 });
+        }
+
+        if (this.totalTime > 8 && this.ghosts.length === 1) {
+          this.ghosts.push({ x: this.icePosition + 100, y: 50, age: 0, maxAge: 60 });
+        }
+
+        this.ghosts.forEach(ghost => {
+          ghost.age += deltaTime;
+        });
+        this.ghosts = this.ghosts.filter(ghost => ghost.age < ghost.maxAge);
+      }
+
+      getData() {
+        return {
+          vehicles: this.vehicles,
+          ghosts: this.ghosts,
+          highwayLength: this.highwayLength,
+          icePosition: this.icePosition,
+          totalTime: this.totalTime,
+        };
+      }
+    }
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const demo = new GhostTrailsDemo();
+    let packetCount = 0;
+    let logEntries = [];
+    let freezeShown = false;
+
+    const denmLogs = [
+      "DENM: 00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF",
+      "DENM: 112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00",
+      "DENM: 2233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF0011",
+      "DENM: 33445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF001122",
+      "DENM: 445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233"
+    ];
+
+    function draw() {
+      const data = demo.getData();
+      packetCount++;
+      if (data.ghosts.length > 0 && !freezeShown) {
+        document.getElementById('freeze').style.opacity = 1;
+        setTimeout(() => document.getElementById('freeze').style.opacity = 0, 2000);
+        freezeShown = true;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Test text
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px Arial';
+      ctx.fillText('Ghost Trails Demo', 100, 30);
+
+      // Background buildings
+      ctx.fillStyle = '#333';
+      for (let i = 0; i < 10; i++) {
+        const x = i * 150;
+        const h = 50 + Math.sin(i) * 20;
+        ctx.fillRect(x, canvas.height - h, 100, h);
+      }
+
+      // Curved highway lanes with perspective
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      for (let y = 50; y < canvas.height - 50; y += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Ego-glow for lead car
+      const lead = data.vehicles.find(v => v.type === 'lead');
+      if (lead) {
+        const screenX = (lead.x / data.highwayLength) * canvas.width;
+        const screenY = lead.y;
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 30, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
+      // Vehicles as cyan arrows
+      data.vehicles.forEach(vehicle => {
+        const screenX = (vehicle.x / data.highwayLength) * canvas.width;
+        const screenY = vehicle.y;
+        ctx.fillStyle = vehicle.color;
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY);
+        ctx.lineTo(screenX - 10, screenY - 5);
+        ctx.lineTo(screenX - 10, screenY + 5);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      // Ghosts with pulse and "!"
+      data.ghosts.forEach(ghost => {
+        const screenX = (ghost.x / data.highwayLength) * canvas.width;
+        const screenY = ghost.y;
+        const alpha = 1 - ghost.age / ghost.maxAge;
+        const pulse = 1 + Math.sin(ghost.age * 10) * 0.2;
+        ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(screenX, screenY, 20 * pulse, 10 * pulse, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Arial';
+        ctx.fillText('!', screenX - 3, screenY + 5);
+        // Range ring
+        ctx.strokeStyle = `rgba(255, 255, 0, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 120, 0, 2 * Math.PI);
+        ctx.stroke();
+        // Countdown timer
+        const timeLeft = Math.max(0, ghost.maxAge - ghost.age).toFixed(1);
+        ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+        ctx.fillText(timeLeft + 's', screenX - 10, screenY - 15);
+      });
+
+      // Latency lines
+      if (data.ghosts.length > 0) {
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 1;
+        data.vehicles.forEach(vehicle => {
+          if (vehicle.type === 'follow') {
+            const screenX = (vehicle.x / data.highwayLength) * canvas.width;
+            const screenY = vehicle.y;
+            const ghost = data.ghosts[0];
+            const ghostX = (ghost.x / data.highwayLength) * canvas.width;
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY);
+            ctx.lineTo(ghostX, ghost.y);
+            ctx.stroke();
+          }
+        });
+      }
+
+      // Radio ripple
+      if (data.ghosts.length > 0) {
+        const ghost = data.ghosts[0];
+        const ghostX = (ghost.x / data.highwayLength) * canvas.width;
+        const rippleAge = ghost.age % 2;
+        ctx.strokeStyle = `rgba(0, 255, 0, ${1 - rippleAge})`;
+        ctx.beginPath();
+        ctx.arc(ghostX, ghost.y, rippleAge * 200, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+
+      // Stats bar
+      document.getElementById('stats').innerHTML = `Packets: ${packetCount} | Ghosts: ${data.ghosts.length} | Time: ${data.totalTime.toFixed(1)}s`;
+
+      // Scrolling DENM log
+      if (data.ghosts.length > 0 && logEntries.length < 10) {
+        logEntries.push(denmLogs[Math.floor(Math.random() * denmLogs.length)]);
+      }
+      document.getElementById('log').innerHTML = 'DENM Log:<br>' + logEntries.slice(-10).join('<br>');
+    }
+
+    setInterval(() => {
+      demo.step(0.08);
+      draw();
+    }, 80);
+
+    draw(); // Initial draw
+  </script>
+</body>
+</html>
