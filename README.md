@@ -8,10 +8,11 @@ https://x.com/RielyDionne/status/1993902438605312370
 - Live DENM packet log, avoidance steering, Tesla FSD-style HUD
 - Zero new hardware · One OTA
 
-Built solo in Visual Studio (C# WinForms) in <48 hours, Nov 26–27 2025.
+Built solo in Visual Studio (C# WinForms) in <12 hours, Nov 26–27 2025.
 
 Canadian provisional patent filing in progress — will assign to Tesla for free if shipped.
 
 Phase 2 (aerial/drone swarm) coming next.
+
 
 Riely Dionne · West Kelowna, BC · @RielyDionne
