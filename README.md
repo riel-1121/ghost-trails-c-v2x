@@ -1,6 +1,6 @@
-# TimeFold Algorithm — CV2X Collision Avoidance
+# TimeFold Algorithm v1.1 — CV2X Collision Avoidance
 
-Advanced temporal decay algorithm for multi-agent collision avoidance in Connected Vehicle-to-Everything (CV2X) systems. Pure mathematical optimization achieving 10.44% collision reduction through non-monotonic temporal weighting.
+Advanced temporal decay algorithm for multi-agent collision avoidance in Connected Vehicle-to-Everything (CV2X) systems. Pure mathematical optimization achieving 10.00% collision reduction through non-monotonic temporal weighting.
 
 ## Performance Results
 
