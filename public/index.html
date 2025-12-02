@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost Trails Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #000;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #111;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="800" height="200"></canvas>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const socket = io();
+        let packetCount = 0;
+        let ghostsAlive = false;
+        let packetLog = [];
+        let lastGhostCount = 0;
+        let denmIndex = 0;
+        const realDenm = [
+            "DENM 0001 | 0.0s | 49.282147 -123.120451 | Cause=SlipperyRoad Sub=Ice",
+            "DENM 0002 | 0.1s | 49.282148 -123.120452 | Cause=SlipperyRoad Sub=Ice",
+            "DENM 0003 | 0.2s | 49.282149 -123.120453 | Cause=SlipperyRoad Sub=Ice",
+            "DENM 0004 | 1.2s | 49.282300 -123.120600 | Cause=SlipperyRoad Sub=Ice",
+            "DENM 0005 | 8.7s | 49.282500 -123.120800 | Cause=SlipperyRoad Sub=Ice"
+        ];
+        const latencyLines = [
+            "50 m  → 8 ms",
+            "100 m → 16 ms",
+            "300 m → 32 ms",
+            "500 m → 48 ms"
+        ];
+
+        setInterval(() => {
+            if (ghostsAlive) packetCount++;
+        }, 100);
+
+        socket.on('update', (data) => {
+            // Handle comparative data - use TimeFold for primary display
+            const primaryData = data.timeFold || data;
+            ghostsAlive = primaryData.ghosts.length > 0;
+            if (primaryData.ghosts.length > lastGhostCount) {
+                for (let i = lastGhostCount; i < primaryData.ghosts.length; i++) {
+                    const hex = realDenm[denmIndex % realDenm.length];
+                    packetLog.push(hex);
+                    denmIndex++;
+                    if (packetLog.length > 20) packetLog.shift();
+                }
+            }
+            lastGhostCount = primaryData.ghosts.length;
+            draw(primaryData, data);
+        });
+
+        function draw(data, fullData = null) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background buildings
+            ctx.fillStyle = 'rgba(100, 100, 120, 0.3)';
+            ctx.fillRect(0, 0, 200, canvas.height);
+            ctx.fillRect(canvas.width - 200, 0, 200, canvas.height);
+
+            // Draw Tesla road lines (curved)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)'; // faint cyan lanes
+            ctx.lineWidth = 6;
+            const y1 = canvas.height * 0.3;
+            const y2 = canvas.height;
+            for (let i = -4; i <= 4; i++) {
+                const xOffset = i * 120 * (1 - y1 / canvas.height);
+                const x = canvas.width / 2 + xOffset;
+                ctx.beginPath();
+                ctx.moveTo(x, y1);
+                ctx.lineTo(x + i * 300, y2);
+                ctx.stroke();
+            }
+            // Yellow center
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, y1);
+            ctx.lineTo(canvas.width / 2 + 0 * 300, y2); // straight for center
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw ice
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+            ctx.fillRect(data.icePosition - 10, 90, 20, 20);
+
+            // Text overlays
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText('Ghost Trails — C-V2X hazard broadcast', 15, 35);
+            ctx.font = '14px Arial';
+            ctx.fillText('Red ghost = black ice detected — fades over 60 seconds', 15, 75);
+
+            // Packet counter top-right with TimeFold stats
+            ctx.fillStyle = 'cyan';
+            ctx.font = '12px Consolas';
+            ctx.fillText(`DENM pkts: ${packetCount}`, canvas.width - 200, 15);
+            if (data.timeFoldStats) {
+                ctx.fillText(`Fleet Memory: ${data.timeFoldStats.fleetMemory}`, canvas.width - 200, 30);
+                ctx.fillText(`Max Iterations: ${data.timeFoldStats.maxIterations}`, canvas.width - 200, 45);
+            }
+            
+            // Comparative metrics if available
+            if (fullData && fullData.comparison) {
+                ctx.fillStyle = 'lime';
+                ctx.fillText(`Collision Reduction: ${fullData.comparison.collisionReduction.toFixed(1)}%`, canvas.width - 200, 60);
+                ctx.fillText(`Avoidance Efficiency: ${fullData.comparison.avoidanceEfficiency.toFixed(2)}x`, canvas.width - 200, 75);
+                ctx.fillText(`Comm Overhead: ${fullData.comparison.communicationOverhead.toFixed(2)}x`, canvas.width - 200, 90);
+            }
+
+            // Draw vehicles as arrows
+            data.vehicles.forEach(vehicle => {
+                const x = (vehicle.x / data.highwayLength) * canvas.width;
+                const y = 100 + (vehicle.y - 50); // adjust for swerve
+                const angle = vehicle.direction;
+                const tipX = x + 12 * Math.cos(angle);
+                const tipY = y + 12 * Math.sin(angle);
+                const leftX = x - 8 * Math.cos(angle - 2.8);
+                const leftY = y - 8 * Math.sin(angle - 2.8);
+                const rightX = x - 8 * Math.cos(angle + 2.8);
+                const rightY = y - 8 * Math.sin(angle + 2.8);
+                ctx.fillStyle = vehicle.color;
+                ctx.beginPath();
+                ctx.moveTo(tipX, tipY);
+                ctx.lineTo(leftX, leftY);
+                ctx.lineTo(rightX, rightY);
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // Draw packet log
+            ctx.fillStyle = 'limegreen';
+            ctx.font = '9px Consolas';
+            for (let i = 0; i < packetLog.length; i++) {
+                ctx.fillText(packetLog[packetLog.length - 1 - i], 10, canvas.height - 60 - i * 18);
+            }
+
+            // Draw latency log
+            ctx.fillStyle = 'yellow';
+            for (let i = 0; i < latencyLines.length; i++) {
+                ctx.fillText(latencyLines[i], canvas.width - 150, canvas.height - 60 - i * 18);
+            }
+
+            // Draw range ring around lead car
+            const lead = data.vehicles.find(v => v.type === 'lead');
+            if (lead) {
+                const broadcasterX = (lead.x / data.highwayLength) * canvas.width;
+                const broadcasterY = 100;
+                const rangeMeters = 500;
+                const metersPerPixel = 2.0; // adjusted for smaller ring
+                const radiusPixels = rangeMeters / metersPerPixel;
+                if (broadcasterX + radiusPixels < canvas.width && broadcasterX - radiusPixels > 0) {
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)'; // faint cyan
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.ellipse(broadcasterX, broadcasterY, radiusPixels, radiusPixels, 0, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    // Optional subtle label
+                    ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
+                    ctx.font = '10px Arial';
+                    ctx.fillText('500 m', broadcasterX - radiusPixels - 50, broadcasterY - 10);
+                }
+                // Blue ego-glow
+                ctx.strokeStyle = 'rgba(0, 191, 255, 0.4)'; // blue glow
+                ctx.lineWidth = 20;
+                ctx.beginPath();
+                ctx.ellipse(broadcasterX, broadcasterY, 60, 60, 0, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            // Draw ghosts
+            data.ghosts.forEach(ghost => {
+                const px = (ghost.x / data.highwayLength) * canvas.width;
+                const py = 100;
+                const age = ghost.age;
+                let pulse = 0;
+                if (age < 4) {
+                    pulse = 0.5 + 0.5 * Math.sin(age * 8);
+                }
+                const alpha = 255 * (1 - age / 60);
+                ctx.strokeStyle = `rgba(255, 80, 80, ${alpha / 255})`;
+                ctx.lineWidth = 12 + pulse * 8;
+                ctx.beginPath();
+                ctx.ellipse(px, py, 50, 50, 0, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px Arial';
+                ctx.fillText('!', px - 18, py + 18);
+                // Countdown timer under the !
+                const secondsLeft = Math.max(0, 60 - Math.floor(age));
+                const minutes = Math.floor(secondsLeft / 60);
+                const secs = secondsLeft % 60;
+                const timer = `${minutes}:${secs < 10 ? '0' + secs : secs}`;
+                ctx.fillStyle = 'cyan';
+                ctx.font = 'bold 28px Consolas';
+                ctx.fillText(timer, px - 25, py + 50);
+            });
+
+            // Latency label bottom-right
+            ctx.fillStyle = 'cyan';
+            ctx.font = 'bold 14px Consolas';
+            ctx.textAlign = 'right';
+            ctx.fillText('< 50 ms edge-to-edge', canvas.width - 15, canvas.height - 15);
+
+            // Spec bar bottom
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('C-V2X PC5 • 10Hz • 500m • <48ms • 1.2kB/s • 100% P2P', 10, canvas.height - 10);
+
+            // Freeze frame text
+            if (data.totalTime > 18) {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 36px Segoe UI';
+                ctx.textAlign = 'left';
+                ctx.fillText('Assigning patent to Tesla for free', 60, canvas.height / 2 - 50);
+                ctx.fillStyle = 'cyan';
+                ctx.font = '24px Segoe UI';
+                ctx.fillText('One OTA. Zero new hardware.', 60, canvas.height / 2 + 20);
+            }
+        }
+    </script>
+</body>
+</html>
