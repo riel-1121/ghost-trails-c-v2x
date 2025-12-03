@@ -22,6 +22,17 @@ export class GhostTrailsTimeFold {
   static readonly ALPHA = 1000.0; // Extreme harmonic modulation weight
   static readonly BETA = -500.0; // Extreme negative direct modulation
   
+  // Dynamic parameters that can be updated
+  private static currentLambda = 0.1;
+  private static currentAlpha = 1000.0;
+  private static currentBeta = -500.0;
+  
+  static setParameters(lambda: number, alpha: number, beta: number) {
+    this.currentLambda = lambda;
+    this.currentAlpha = alpha;
+    this.currentBeta = beta;
+  }
+  
   /**
    * Power-law TimeFold temporal decay formula: τ(n) = n^(-λ) × [α×cos(ωφ(n)) + β×cos(γ√n) + δ×sin(εφ(n))]
    * Uses power-law decay with triple oscillatory modulation for enhanced non-monotonic temporal weighting
@@ -31,10 +42,10 @@ export class GhostTrailsTimeFold {
     const sqrtN = Math.sqrt(iteration);
     const phiApprox = 2 * sqrtN; // Closed-form harmonic series approximation
     const harmonicMod = Math.cos(this.OMEGA * phiApprox);
-    const directMod = Math.cos(this.BETA * sqrtN);
+    const directMod = Math.cos(this.currentBeta * sqrtN);
     const sineMod = Math.sin(0.05 * phiApprox); // Additional sine modulation
-    const modulation = this.ALPHA * harmonicMod + (1 - this.ALPHA) * directMod + 100.0 * sineMod;
-    return Math.pow(iteration + 1, -this.LAMBDA) * modulation;
+    const modulation = this.currentAlpha * harmonicMod + (1 - this.currentAlpha) * directMod + 100.0 * sineMod;
+    return Math.pow(iteration + 1, -this.currentLambda) * modulation;
   }
   
   static fleetMemoryAfterBroadcasts(broadcasts: number): number {
@@ -58,6 +69,10 @@ export class GhostTrailsDemo {
   private icePosition = 300;
   private totalTime = 0;
   
+  // Dynamic parameters
+  private vehicleCount = 20;
+  private hazardFrequency = 5;
+  
   // Performance metrics
   private metrics = {
     totalCollisions: 0,
@@ -72,29 +87,47 @@ export class GhostTrailsDemo {
     this.reset();
   }
 
+  setVehicleCount(count: number) {
+    this.vehicleCount = Math.max(1, Math.min(50, count));
+    this.reset(); // Reset to apply new vehicle count
+  }
+
+  setHazardFrequency(frequency: number) {
+    this.hazardFrequency = Math.max(0.1, Math.min(20, frequency));
+  }
+
   reset() {
-    this.vehicles = [
-      { id: 0, x: 50, y: 50, speed: 5, color: '#3498db', type: 'lead', direction: 0, lateralSpeed: 0 }, // Blue lead
-      { id: 1, x: 200, y: 50, speed: 5, color: '#e74c3c', type: 'follow', direction: 0, lateralSpeed: 0 }, // Red follow
-      { id: 2, x: 350, y: 50, speed: 5, color: '#27ae60', type: 'follow', direction: 0, lateralSpeed: 0 }, // Green follow
-      { id: 3, x: 500, y: 50, speed: 5, color: '#f39c12', type: 'follow', direction: 0, lateralSpeed: 0 }, // Orange follow
-      { id: 4, x: 100, y: 50, speed: 4.5, color: '#9b59b6', type: 'follow', direction: 0, lateralSpeed: 0 }, // Purple
-      { id: 5, x: 250, y: 50, speed: 5.5, color: '#1abc9c', type: 'follow', direction: 0, lateralSpeed: 0 }, // Teal
-      { id: 6, x: 400, y: 50, speed: 4, color: '#e67e22', type: 'follow', direction: 0, lateralSpeed: 0 }, // Carrot
-      { id: 7, x: 150, y: 50, speed: 5.2, color: '#34495e', type: 'follow', direction: 0, lateralSpeed: 0 }, // Dark blue
-      { id: 8, x: 300, y: 50, speed: 4.8, color: '#16a085', type: 'follow', direction: 0, lateralSpeed: 0 }, // Green sea
-      { id: 9, x: 450, y: 50, speed: 5.3, color: '#f1c40f', type: 'follow', direction: 0, lateralSpeed: 0 }, // Yellow
-      { id: 10, x: 50, y: 50, speed: 4.7, color: '#8e44ad', type: 'follow', direction: 0, lateralSpeed: 0 }, // Dark purple
-      { id: 11, x: 200, y: 50, speed: 5.1, color: '#2c3e50', type: 'follow', direction: 0, lateralSpeed: 0 }, // Dark blue-gray
-      { id: 12, x: 350, y: 50, speed: 4.9, color: '#d35400', type: 'follow', direction: 0, lateralSpeed: 0 }, // Dark orange
-      { id: 13, x: 500, y: 50, speed: 5.4, color: '#27ae60', type: 'follow', direction: 0, lateralSpeed: 0 }, // Green (duplicate ok for variety)
-      { id: 14, x: 100, y: 50, speed: 4.6, color: '#9b59b6', type: 'follow', direction: 0, lateralSpeed: 0 }, // Purple (duplicate ok)
-      { id: 15, x: 175, y: 50, speed: 5.0, color: '#e74c3c', type: 'follow', direction: 0, lateralSpeed: 0 }, // Red
-      { id: 16, x: 275, y: 50, speed: 4.8, color: '#27ae60', type: 'follow', direction: 0, lateralSpeed: 0 }, // Green
-      { id: 17, x: 375, y: 50, speed: 5.2, color: '#f39c12', type: 'follow', direction: 0, lateralSpeed: 0 }, // Orange
-      { id: 18, x: 475, y: 50, speed: 4.9, color: '#9b59b6', type: 'follow', direction: 0, lateralSpeed: 0 }, // Purple
-      { id: 19, x: 125, y: 50, speed: 5.1, color: '#1abc9c', type: 'follow', direction: 0, lateralSpeed: 0 }, // Teal
-    ];
+    // Generate vehicles based on vehicleCount
+    this.vehicles = [];
+    const colors = ['#3498db', '#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#16a085', '#f1c40f'];
+    
+    // Add lead vehicle
+    this.vehicles.push({
+      id: 0,
+      x: 50,
+      y: 50,
+      speed: 5,
+      color: '#3498db',
+      type: 'lead',
+      direction: 0,
+      lateralSpeed: 0
+    });
+    
+    // Add follower vehicles
+    for (let i = 1; i < this.vehicleCount; i++) {
+      const spacing = (this.highwayLength - 100) / (this.vehicleCount - 1);
+      this.vehicles.push({
+        id: i,
+        x: 50 + i * spacing,
+        y: 50,
+        speed: 4 + Math.random() * 1.5, // Random speed between 4-5.5
+        color: colors[i % colors.length],
+        type: 'follow',
+        direction: 0,
+        lateralSpeed: 0
+      });
+    }
+    
     this.ghosts = [];
     this.totalTime = 0;
     // Reset metrics
@@ -168,21 +201,12 @@ export class GhostTrailsDemo {
     // Communication overhead (broadcasts per second)
     this.metrics.communicationOverhead = this.ghosts.length * 10; // 10Hz broadcast rate
 
-    // Spawn hazards at fixed times
-    if (this.totalTime > 5 && this.ghosts.length === 0) {
-      this.ghosts.push({ x: this.icePosition, y: 50, age: 0, maxAge: 120 });
-    }
-    if (this.totalTime > 10 && this.ghosts.length === 1) {
-      this.ghosts.push({ x: this.icePosition + 100, y: 50, age: 0, maxAge: 120 });
-    }
-    if (this.totalTime > 15 && this.ghosts.length === 2) {
-      this.ghosts.push({ x: this.icePosition + 200, y: 50, age: 0, maxAge: 120 });
-    }
-    if (this.totalTime > 20 && this.ghosts.length === 3) {
-      this.ghosts.push({ x: this.icePosition + 300, y: 50, age: 0, maxAge: 120 });
-    }
-    if (this.totalTime > 25 && this.ghosts.length === 4) {
-      this.ghosts.push({ x: this.icePosition + 400, y: 50, age: 0, maxAge: 120 });
+    // Spawn hazards based on frequency
+    const hazardInterval = 60 / this.hazardFrequency; // Convert frequency to seconds between hazards
+    const hazardCount = Math.floor(this.totalTime / hazardInterval);
+    while (this.ghosts.length < hazardCount && this.ghosts.length < 10) {
+      const hazardX = this.icePosition + (this.ghosts.length * 100);
+      this.ghosts.push({ x: hazardX, y: 50, age: 0, maxAge: 120 });
     }
 
     // Age ghosts

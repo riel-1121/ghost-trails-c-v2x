@@ -3,30 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ghost Trails Demo</title>
+    <title>TimeFold CV2X</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background: #000;
-            color: #fff;
+        html, body {
+            background: #1a252f;
             margin: 0;
-            padding: 20px;
-        }
-        canvas {
-            border: 2px solid #333;
-            background: #111;
+            padding: 10px;
+            height: 100%;
+            color: white;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas" width="800" height="200"></canvas>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <div style="margin-top: 10px;">
+        <button onclick="exportData()">Export Data</button>
+        <span id="status"></span>
+    </div>
+
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const socket = io();
+        
+        // Add error handling and immediate visual feedback
+        if (!ctx) {
+            document.body.innerHTML = '<h1 style="color: red;">Canvas not supported!</h1>';
+        } else {
+            // Set canvas background immediately
+            ctx.fillStyle = '#1a252f';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Loading TimeFold CV2X...', 250, 100);
+        }
+        
         let packetCount = 0;
         let ghostsAlive = false;
         let packetLog = [];
@@ -46,25 +57,94 @@
             "500 m → 48 ms"
         ];
 
-        setInterval(() => {
-            if (ghostsAlive) packetCount++;
-        }, 100);
-
-        socket.on('update', (data) => {
-            // Handle comparative data - use TimeFold for primary display
-            const primaryData = data.timeFold || data;
-            ghostsAlive = primaryData.ghosts.length > 0;
-            if (primaryData.ghosts.length > lastGhostCount) {
-                for (let i = lastGhostCount; i < primaryData.ghosts.length; i++) {
-                    const hex = realDenm[denmIndex % realDenm.length];
-                    packetLog.push(hex);
-                    denmIndex++;
-                    if (packetLog.length > 20) packetLog.shift();
-                }
+        // Sample data for demonstration
+        let sampleData = {
+            vehicles: [
+                { x: 100, y: 25, color: 'red', type: 'lead' },    // Left lane
+                { x: 200, y: 50, color: 'blue', type: 'follower' }, // Center lane
+                { x: 300, y: 75, color: 'green', type: 'follower' } // Right lane
+            ],
+            ghosts: [
+                { x: 150, age: 5 },
+                { x: 250, age: 15 }
+            ],
+            icePosition: 180,
+            highwayLength: 400,
+            timeFoldStats: {
+                fleetMemory: 42,
+                maxIterations: 1000
             }
-            lastGhostCount = primaryData.ghosts.length;
-            draw(primaryData, data);
-        });
+        };
+
+        // Start demo animation with proper frame timing
+        let lastTime = 0;
+        const targetFPS = 30; // Limit to 30 FPS for performance
+        const frameInterval = 1000 / targetFPS;
+
+        function animate(currentTime) {
+            try {
+                if (currentTime - lastTime >= frameInterval) {
+                    if (ghostsAlive) packetCount++;
+                    
+                    // Animate vehicles moving forward
+                    sampleData.vehicles.forEach(vehicle => {
+                        vehicle.x += 2; // Move forward
+                        if (vehicle.x > sampleData.highwayLength) {
+                            vehicle.x = 0; // Reset to start
+                        }
+                    });
+                    
+                    // Age ghosts and remove expired ones
+                    sampleData.ghosts = sampleData.ghosts.filter(ghost => {
+                        ghost.age += 0.1;
+                        return ghost.age <= 60; // Keep ghosts that haven't expired
+                    });
+                    
+                    // Move ice hazard
+                    sampleData.icePosition += 1;
+                    if (sampleData.icePosition > sampleData.highwayLength) {
+                        sampleData.icePosition = 0;
+                    }
+                    
+                    // Check for hazard detection - create ghosts when vehicles encounter ice
+                    sampleData.vehicles.forEach(vehicle => {
+                        const distanceToIce = Math.abs(vehicle.x - sampleData.icePosition);
+                        if (distanceToIce < 20) { // Within 20 units of ice hazard
+                            // Check if ghost already exists at this location
+                            const existingGhost = sampleData.ghosts.find(ghost => 
+                                Math.abs(ghost.x - sampleData.icePosition) < 10
+                            );
+                            
+                            if (!existingGhost) {
+                                // Create new ghost warning
+                                sampleData.ghosts.push({
+                                    x: sampleData.icePosition,
+                                    age: 0
+                                });
+                                
+                                // Add DENM packet to log
+                                const hex = realDenm[denmIndex % realDenm.length];
+                                packetLog.push(hex);
+                                denmIndex++;
+                                if (packetLog.length > 20) packetLog.shift();
+                                ghostsAlive = true;
+                            }
+                        }
+                    });
+                    
+                    draw(sampleData);
+                    lastTime = currentTime;
+                }
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                ctx.fillStyle = 'red';
+                ctx.font = '16px Arial';
+                ctx.fillText('Animation Error: ' + error.message, 10, 30);
+            }
+        }
+        
+        requestAnimationFrame(animate);
 
         function draw(data, fullData = null) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -74,35 +154,43 @@
             ctx.fillRect(0, 0, 200, canvas.height);
             ctx.fillRect(canvas.width - 200, 0, 200, canvas.height);
 
-            // Draw Tesla road lines (curved)
+            // Draw Tesla road with proper perspective (converging lanes)
             ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)'; // faint cyan lanes
             ctx.lineWidth = 6;
-            const y1 = canvas.height * 0.3;
-            const y2 = canvas.height;
-            for (let i = -4; i <= 4; i++) {
-                const xOffset = i * 120 * (1 - y1 / canvas.height);
-                const x = canvas.width / 2 + xOffset;
+            const roadTop = canvas.height * 0.3; // 60
+            const roadBottom = canvas.height; // 200
+            const roadWidthTop = canvas.width * 0.2; // Narrow at top
+            const roadWidthBottom = canvas.width * 0.8; // Wide at bottom
+            const centerX = canvas.width / 2;
+
+            // Draw converging lane lines
+            for (let i = -2; i <= 2; i++) {
+                const topX = centerX + (i * roadWidthTop / 4);
+                const bottomX = centerX + (i * roadWidthBottom / 4);
                 ctx.beginPath();
-                ctx.moveTo(x, y1);
-                ctx.lineTo(x + i * 300, y2);
+                ctx.moveTo(topX, roadTop);
+                ctx.lineTo(bottomX, roadBottom);
                 ctx.stroke();
             }
-            // Yellow center
+
+            // Yellow center line (dashed, converging)
             ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
             ctx.lineWidth = 2;
             ctx.setLineDash([10, 10]);
             ctx.beginPath();
-            ctx.moveTo(canvas.width / 2, y1);
-            ctx.lineTo(canvas.width / 2 + 0 * 300, y2); // straight for center
+            ctx.moveTo(centerX, roadTop);
+            ctx.lineTo(centerX, roadBottom);
             ctx.stroke();
             ctx.setLineDash([]);
 
             // Draw ice
             ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
-            ctx.fillRect(data.icePosition - 10, 90, 20, 20);
+            const iceProgress = data.icePosition / data.highwayLength;
+            const iceY = roadTop + iceProgress * (roadBottom - roadTop);
+            ctx.fillRect(centerX - 10, iceY - 10, 20, 20);
 
             // Text overlays
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 18px Arial';
             ctx.fillText('Ghost Trails — C-V2X hazard broadcast', 15, 35);
             ctx.font = '14px Arial';
@@ -116,7 +204,7 @@
                 ctx.fillText(`Fleet Memory: ${data.timeFoldStats.fleetMemory}`, canvas.width - 200, 30);
                 ctx.fillText(`Max Iterations: ${data.timeFoldStats.maxIterations}`, canvas.width - 200, 45);
             }
-            
+
             // Comparative metrics if available
             if (fullData && fullData.comparison) {
                 ctx.fillStyle = 'lime';
@@ -125,17 +213,28 @@
                 ctx.fillText(`Comm Overhead: ${fullData.comparison.communicationOverhead.toFixed(2)}x`, canvas.width - 200, 90);
             }
 
-            // Draw vehicles as arrows
+            // Draw vehicles positioned on the perspective road
             data.vehicles.forEach(vehicle => {
-                const x = (vehicle.x / data.highwayLength) * canvas.width;
-                const y = 100 + (vehicle.y - 50); // adjust for swerve
-                const angle = vehicle.direction;
-                const tipX = x + 12 * Math.cos(angle);
-                const tipY = y + 12 * Math.sin(angle);
-                const leftX = x - 8 * Math.cos(angle - 2.8);
-                const leftY = y - 8 * Math.sin(angle - 2.8);
-                const rightX = x - 8 * Math.cos(angle + 2.8);
-                const rightY = y - 8 * Math.sin(angle + 2.8);
+                // Position along the road (0 = far away, 1 = close)
+                const progress = vehicle.x / data.highwayLength;
+                const roadY = roadTop + progress * (roadBottom - roadTop);
+
+                // Road width at this distance (linear interpolation)
+                const roadWidthAtY = roadWidthTop + (roadWidthBottom - roadWidthTop) * ((roadY - roadTop) / (roadBottom - roadTop));
+
+                // Lane position within the road - map y values to lane positions
+                // y=0: far left, y=50: center, y=100: far right
+                const laneIndex = Math.round((vehicle.y / 100) * 4) - 2; // Map 0-100 to -2 to 2
+                const laneOffset = laneIndex * (roadWidthAtY / 4); // Use same spacing as road lanes
+                const x = centerX + laneOffset;
+
+                const angle = -Math.PI / 2; // Point up (towards viewer)
+                const tipX = x + 8 * Math.cos(angle);
+                const tipY = roadY + 8 * Math.sin(angle);
+                const leftX = x - 6 * Math.cos(angle - 2.8);
+                const leftY = roadY - 6 * Math.sin(angle - 2.8);
+                const rightX = x - 6 * Math.cos(angle + 2.8);
+                const rightY = roadY - 6 * Math.sin(angle + 2.8);
                 ctx.fillStyle = vehicle.color;
                 ctx.beginPath();
                 ctx.moveTo(tipX, tipY);
@@ -161,24 +260,27 @@
             // Draw range ring around lead car
             const lead = data.vehicles.find(v => v.type === 'lead');
             if (lead) {
-                const broadcasterX = (lead.x / data.highwayLength) * canvas.width;
-                const broadcasterY = 100;
+                const progress = lead.x / data.highwayLength;
+                const broadcasterY = roadTop + progress * (roadBottom - roadTop);
+                const roadWidthAtY = roadWidthTop + (roadWidthBottom - roadWidthTop) * ((broadcasterY - roadTop) / (roadBottom - roadTop));
+                const laneIndex = Math.round((lead.y / 100) * 4) - 2;
+                const laneOffset = laneIndex * (roadWidthAtY / 4);
+                const broadcasterX = centerX + laneOffset;
                 const rangeMeters = 500;
-                const metersPerPixel = 2.0; // adjusted for smaller ring
+                const metersPerPixel = 2.0;
                 const radiusPixels = rangeMeters / metersPerPixel;
                 if (broadcasterX + radiusPixels < canvas.width && broadcasterX - radiusPixels > 0) {
-                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)'; // faint cyan
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.ellipse(broadcasterX, broadcasterY, radiusPixels, radiusPixels, 0, 0, 2 * Math.PI);
                     ctx.stroke();
-                    // Optional subtle label
                     ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
                     ctx.font = '10px Arial';
                     ctx.fillText('500 m', broadcasterX - radiusPixels - 50, broadcasterY - 10);
                 }
                 // Blue ego-glow
-                ctx.strokeStyle = 'rgba(0, 191, 255, 0.4)'; // blue glow
+                ctx.strokeStyle = 'rgba(0, 191, 255, 0.4)';
                 ctx.lineWidth = 20;
                 ctx.beginPath();
                 ctx.ellipse(broadcasterX, broadcasterY, 60, 60, 0, 0, 2 * Math.PI);
@@ -187,8 +289,9 @@
 
             // Draw ghosts
             data.ghosts.forEach(ghost => {
-                const px = (ghost.x / data.highwayLength) * canvas.width;
-                const py = 100;
+                const progress = ghost.x / data.highwayLength;
+                const py = roadTop + progress * (roadBottom - roadTop);
+                const px = centerX;
                 const age = ghost.age;
                 let pulse = 0;
                 if (age < 4) {
@@ -203,7 +306,6 @@
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 48px Arial';
                 ctx.fillText('!', px - 18, py + 18);
-                // Countdown timer under the !
                 const secondsLeft = Math.max(0, 60 - Math.floor(age));
                 const minutes = Math.floor(secondsLeft / 60);
                 const secs = secondsLeft % 60;
@@ -220,25 +322,33 @@
             ctx.fillText('< 50 ms edge-to-edge', canvas.width - 15, canvas.height - 15);
 
             // Spec bar bottom
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = '#ffffff';
             ctx.font = '14px Arial';
             ctx.textAlign = 'left';
             ctx.fillText('C-V2X PC5 • 10Hz • 500m • <48ms • 1.2kB/s • 100% P2P', 10, canvas.height - 10);
+        }
 
-            // Freeze frame text
-            if (data.totalTime > 18) {
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 36px Segoe UI';
-                ctx.textAlign = 'left';
-                ctx.fillText('Assigning patent to Tesla for free', 60, canvas.height / 2 - 50);
-                ctx.fillStyle = 'cyan';
-                ctx.font = '24px Segoe UI';
-                ctx.fillText('One OTA. Zero new hardware.', 60, canvas.height / 2 + 20);
-            }
+        function exportData() {
+            const status = document.getElementById('status');
+            status.textContent = 'Exporting...';
+
+            // Simple CSV export of current metrics
+            const csv = `TimeFold Stats\nCollision Reduction: ${document.querySelector('canvas').getAttribute('data-collision-reduction') || 'N/A'}\nFleet Memory: ${document.querySelector('canvas').getAttribute('data-fleet-memory') || 'N/A'}\n`;
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'timefold-data.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            status.textContent = 'Data exported!';
+            setTimeout(() => status.textContent = '', 3000);
         }
     </script>
 </body>

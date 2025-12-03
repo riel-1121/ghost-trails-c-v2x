@@ -1,5 +1,5 @@
 // Test TimeFold integration in running demo
-const { GhostTrailsTimeFold } = require('./dist/index.js');
+const { GhostTrailsTimeFold } = require('../dist/index.js');
 
 console.log('🧪 Testing TimeFold Integration...\n');
 

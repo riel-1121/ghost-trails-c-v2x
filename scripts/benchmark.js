@@ -1,5 +1,5 @@
 // Comprehensive Benchmarking Script for TimeFold vs Linear Decay
-const { GhostTrailsDemo, GhostTrailsTimeFold } = require('./dist/index.js');
+const { GhostTrailsDemo, GhostTrailsTimeFold } = require('../dist/index.js');
 
 class BenchmarkSuite {
   constructor() {
