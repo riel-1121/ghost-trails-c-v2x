@@ -64,11 +64,8 @@
                 { x: 200, y: 50, color: 'blue', type: 'follower' }, // Center lane
                 { x: 300, y: 75, color: 'green', type: 'follower' } // Right lane
             ],
-            ghosts: [
-                { x: 150, age: 5 },
-                { x: 250, age: 15 }
-            ],
-            icePosition: 180,
+            ghosts: [], // Start with no ghosts - they appear when hazards are detected
+            icePosition: 250, // Fixed position - vehicles move past this hazard
             highwayLength: 400,
             timeFoldStats: {
                 fleetMemory: 42,
@@ -100,22 +97,16 @@
                         return ghost.age <= 60; // Keep ghosts that haven't expired
                     });
                     
-                    // Move ice hazard
-                    sampleData.icePosition += 1;
-                    if (sampleData.icePosition > sampleData.highwayLength) {
-                        sampleData.icePosition = 0;
-                    }
+                    // Ice hazard stays stationary - vehicles move past it
                     
                     // Check for hazard detection - create ghosts when vehicles encounter ice
                     sampleData.vehicles.forEach(vehicle => {
                         const distanceToIce = Math.abs(vehicle.x - sampleData.icePosition);
                         if (distanceToIce < 20) { // Within 20 units of ice hazard
-                            // Check if ghost already exists at this location
-                            const existingGhost = sampleData.ghosts.find(ghost => 
-                                Math.abs(ghost.x - sampleData.icePosition) < 10
-                            );
-                            
-                            if (!existingGhost) {
+                        // Check if ghost already exists at this location (increased spacing)
+                        const existingGhost = sampleData.ghosts.find(ghost => 
+                            Math.abs(ghost.x - sampleData.icePosition) < 30
+                        );                            if (!existingGhost) {
                                 // Create new ghost warning
                                 sampleData.ghosts.push({
                                     x: sampleData.icePosition,
